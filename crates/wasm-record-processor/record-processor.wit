@@ -1,0 +1,13 @@
+enum status {
+    ok,
+    error
+}
+
+record flow-record {
+    key: option<list<u8>>,
+    value: option<list<u8>>,
+    headers: list<tuple<string, list<u8>>>,
+    offset: s64
+}
+
+parse-record: function(rec: flow-record) -> status

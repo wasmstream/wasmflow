@@ -10,7 +10,7 @@ struct KafkaConfig {
     credentials: Option<(String, String)>,
 }
 
-fn read_kafka_config(fname: &str) -> anyhow::Result<KafkaConfig> {
+fn read_config(fname: &str) -> anyhow::Result<KafkaConfig> {
     let file = File::open(fname)?;
     let mut lines = BufReader::new(file).lines();
     Ok(KafkaConfig {
@@ -50,12 +50,10 @@ fn create_tls_config() -> rustls::ClientConfig {
         .with_no_client_auth()
 }
 
-pub async fn init_kafka_client() -> anyhow::Result<Arc<Client>> {
+pub async fn init_client() -> anyhow::Result<Arc<Client>> {
     let fname = std::env::var("WASMFLOW_KAFKA_CONFIG");
     let cfg = match fname {
-        Ok(f) => {
-            read_kafka_config(&f).with_context(|| format!("Error reading Kafka config file {f}"))?
-        }
+        Ok(f) => read_config(&f).with_context(|| format!("Error reading Kafka config file {f}"))?,
         Err(..) => init_default_config(),
     };
 

@@ -92,24 +92,30 @@ fn process_result(
     )
     .expect("Could not create WASM instance.");
 
-    for rec in recs {
-        let key = rec.record.key.unwrap();
-        let value = rec.record.value.unwrap();
-        let headers: Vec<(&str, &[u8])> = rec
-            .record
-            .headers
-            .iter()
-            .map(|(k, v)| (k.as_str(), &v[..]))
-            .collect();
-        let frec = FlowRecord {
-            key: Some(&key),
-            value: Some(&value),
-            headers: &headers,
-            offset: rec.offset,
-        };
-        let resp = wasm_rec_proc
-            .parse_record(store.as_context_mut(), frec)
-            .expect("Error parsing record.");
-        info!(wasm_output = ?resp);
-    }
+    let rec_headers: Vec<Vec<(&str, &[u8])>> = recs
+        .iter()
+        .map(|r| {
+            r.record
+                .headers
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_slice()))
+                .collect()
+        })
+        .collect();
+
+    let frecs: Vec<FlowRecord> = recs
+        .iter()
+        .zip(rec_headers.iter())
+        .map(|(r, h)| FlowRecord {
+            key: r.record.key.as_deref(),
+            value: r.record.value.as_deref(),
+            headers: h,
+            offset: r.offset,
+        })
+        .collect();
+
+    let resp = wasm_rec_proc
+        .parse_records(store.as_context_mut(), &frecs)
+        .expect("Error parsing record.");
+    info!(wasm_output = ?resp);
 }

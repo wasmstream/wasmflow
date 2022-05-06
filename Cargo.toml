@@ -19,4 +19,4 @@ wasi-common = "0.35.0"
 wit-bindgen-wasmtime = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "8080af243cda15447cb5ead8001cbf0098e12540" }
 
 [workspace]
-members = ["crates/wasm-record-processor"]
+members = ["crates/wasm-record-printer"]

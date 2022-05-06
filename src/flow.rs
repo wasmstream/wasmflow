@@ -1,4 +1,4 @@
-wit_bindgen_wasmtime::import!("crates/wasm-record-processor/record-processor.wit");
+wit_bindgen_wasmtime::import!("./wit/record-processor.wit");
 use anyhow::Context;
 pub use record_processor::{FlowRecord, RecordProcessor, RecordProcessorData};
 use rskafka::record::RecordAndOffset;

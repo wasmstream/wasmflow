@@ -1,4 +1,4 @@
-wit_bindgen_rust::export!("record-processor.wit");
+wit_bindgen_rust::export!("../../wit/record-processor.wit");
 
 use record_processor::{FlowRecord, Status};
 struct RecordProcessor;

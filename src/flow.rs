@@ -1,4 +1,4 @@
-wit_bindgen_wasmtime::import!("./wit/record-processor.wit");
+wit_bindgen_wasmtime::import!({ paths: ["./wit/record-processor.wit"], async: *});
 use anyhow::Context;
 pub use record_processor::{FlowRecord, RecordProcessor, RecordProcessorData};
 use rskafka::record::RecordAndOffset;
@@ -7,26 +7,29 @@ use wasi_common::WasiCtx;
 use wasmtime::*;
 use wasmtime_wasi::WasiCtxBuilder;
 
-use crate::sources::kafka::KafkaProcessor;
+use crate::{sinks::s3::S3Writer, sources::kafka::KafkaProcessor};
 
 #[derive(Clone)]
 pub struct FlowProcessor {
     pub engine: Engine,
     pub linker: Linker<FlowState>,
     pub module: Module,
+    pub s3_sink: S3Writer,
 }
 
 #[derive(Default)]
 pub struct FlowState {
     pub wasi: Option<WasiCtx>,
     pub data: RecordProcessorData,
+    pub s3_sink: Option<S3Writer>,
 }
 
 impl FlowProcessor {
-    pub fn new(filename: &str) -> Self {
+    pub fn new(filename: &str, s3_sink: crate::sinks::s3::S3Writer) -> Self {
         let mut config = Config::new();
         config.wasm_multi_memory(true);
         config.wasm_module_linking(true);
+        config.async_support(true);
         let engine = Engine::new(&config).expect("Could not create a new Wasmtime engine.");
         let mut linker: Linker<FlowState> = Linker::new(&engine);
         let module = Module::from_file(&engine, filename)
@@ -34,23 +37,27 @@ impl FlowProcessor {
             .unwrap();
         wasmtime_wasi::add_to_linker(&mut linker, |s| s.wasi.as_mut().unwrap())
             .expect("Failed to add wasi linker.");
+        crate::sinks::s3::s3_sink::add_to_linker(&mut linker, |s| s.s3_sink.as_mut().unwrap())
+            .expect("Failed to add s3_sink");
         Self {
             engine,
             linker,
             module,
+            s3_sink,
         }
     }
 }
 
+#[async_trait::async_trait]
 impl KafkaProcessor for FlowProcessor {
-    fn process_records(
+    async fn process_records(
         &self,
         _topic: &str,
         _partition_id: i32,
         recs: Vec<RecordAndOffset>,
         _high_watermark: i64,
-    ) {
-        let flow_state = FlowState::new();
+    ) -> anyhow::Result<()> {
+        let flow_state = FlowState::new(self.s3_sink.clone());
         let mut store = Store::new(&self.engine, flow_state);
         let (wasm_rec_proc, _) = record_processor::RecordProcessor::instantiate(
             store.as_context_mut(),
@@ -58,7 +65,8 @@ impl KafkaProcessor for FlowProcessor {
             &mut self.linker.clone(),
             |s| &mut s.data,
         )
-        .expect("Could not create WASM instance.");
+        .await
+        .with_context(|| "Could not create WASM instance.")?;
 
         let rec_headers: Vec<Vec<(&str, &[u8])>> = recs
             .iter()
@@ -83,14 +91,16 @@ impl KafkaProcessor for FlowProcessor {
             .collect();
 
         let resp = wasm_rec_proc
-            .parse_records(store.as_context_mut(), &frecs)
-            .expect("Error parsing record.");
+            .process_records(store.as_context_mut(), &frecs)
+            .await
+            .with_context(|| "Error invoking WASM function.")?;
         info!(wasm_output = ?resp);
+        Ok(())
     }
 }
 
 impl FlowState {
-    pub fn new() -> Self {
+    pub fn new(s3_sink: S3Writer) -> Self {
         Self {
             wasi: Some(
                 WasiCtxBuilder::new()
@@ -100,6 +110,7 @@ impl FlowState {
                     .build(),
             ),
             data: RecordProcessorData {},
+            s3_sink: Some(s3_sink),
         }
     }
 }

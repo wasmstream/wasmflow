@@ -1,4 +1,5 @@
 wit_bindgen_rust::export!("../../wit/record-processor.wit");
+wit_bindgen_rust::import!("../../wit/s3-sink.wit");
 
 use record_processor::{FlowRecord, Status};
 struct RecordProcessor;
@@ -15,11 +16,11 @@ impl record_processor::RecordProcessor for RecordProcessor {
             println!("WASM Key - {key}");
             println!("WASM Value - {val}");
             println!("WASM Offset - {}", rec.offset);
-            for hdr in rec.headers {
-                let v: i64 = integer_encoding::VarInt::decode_var(&hdr.1[..])
-                    .unwrap_or((0, 4))
-                    .0;
-                println!("WASM Header - {}:{}", hdr.0, v);
+            let s3_key = format!("{}-{}", key.replace('.', "-"), rec.offset);
+            println!("Writing to S3 Key - {s3_key}");
+            let res = s3_sink::write(&s3_key, val.as_bytes());
+            if res == s3_sink::Status::Error {
+                return Status::Error;
             }
         }
         Status::Ok

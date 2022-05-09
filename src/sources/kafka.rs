@@ -10,14 +10,15 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tracing::info;
 
+#[async_trait::async_trait]
 pub trait KafkaProcessor {
-    fn process_records(
+    async fn process_records(
         &self,
         topic: &str,
         partition_id: i32,
         recs: Vec<RecordAndOffset>,
         high_watermark: i64,
-    );
+    ) -> anyhow::Result<()>;
 }
 
 struct KafkaConfig {
@@ -112,7 +113,10 @@ where
                         })
                         .unwrap();
                     if !result.0.is_empty() {
-                        callback.process_records(&topic_name, partition_id, result.0, result.1);
+                        callback
+                            .process_records(&topic_name, partition_id, result.0, result.1)
+                            .await
+                            .expect("Error with Kafka processor records callback.");
                     } else {
                         // Sleep for 10s
                         tokio::time::sleep(tokio::time::Duration::from_millis(10000)).await;

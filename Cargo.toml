@@ -16,7 +16,14 @@ anyhow = "1"
 wasmtime = "0.35.0"
 wasmtime-wasi = "0.35.0"
 wasi-common = "0.35.0"
-wit-bindgen-wasmtime = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "8080af243cda15447cb5ead8001cbf0098e12540" }
+wit-bindgen-wasmtime = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "51af112a0b1bcd9132db3bd640ca37ea3fc2edaf", features = [
+    "async",
+] }
+aws-sdk-s3 = "0.11.0"
+aws-config = "0.11.0"
+aws-types = "0.11.0"
+bytes = "1.1.0"
+async-trait = "0.1.53"
 
 [workspace]
-members = ["crates/wasm-record-printer"]
+members = ["crates/wasm-record-printer", "crates/wasm-s3-sink"]

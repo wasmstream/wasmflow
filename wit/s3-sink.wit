@@ -1,0 +1,6 @@
+enum status {
+    ok,
+    error
+}
+
+write: function(key: string, body: list<u8>) -> status

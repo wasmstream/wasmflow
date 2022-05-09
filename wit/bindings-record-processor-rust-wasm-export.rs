@@ -30,8 +30,8 @@ mod record_processor {
                 .finish()
         }
     }
-    #[export_name = "parse-records"]
-    unsafe extern "C" fn __wit_bindgen_parse_records(arg0: i32, arg1: i32) -> i32 {
+    #[export_name = "process-records"]
+    unsafe extern "C" fn __wit_bindgen_process_records(arg0: i32, arg1: i32) -> i32 {
         let base5 = arg0;
         let len5 = arg1;
         let mut result5 = Vec::with_capacity(len5 as usize);
@@ -91,10 +91,10 @@ mod record_processor {
             base5 as *mut _,
             std::alloc::Layout::from_size_align_unchecked((len5 as usize) * 40, 8),
         );
-        let result = <super::RecordProcessor as RecordProcessor>::parse_records(result5);
+        let result = <super::RecordProcessor as RecordProcessor>::process_records(result5);
         result as i32
     }
     pub trait RecordProcessor {
-        fn parse_records(recs: Vec<FlowRecord>) -> Status;
+        fn process_records(recs: Vec<FlowRecord>) -> Status;
     }
 }

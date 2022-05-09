@@ -1,0 +1,17 @@
+sources:
+  - Kafka:
+      brokers:
+        - "foo:port"
+      topic: my-topic
+      batch_size: 1000
+      offset: Earliest
+      sasl:
+        Plain:
+          username: secret
+          password: super-secret
+sinks:
+  - S3:
+      region: us-east-1
+      bucket: wasmtime-sink
+processors:
+  - module_path: "./target/wasm32-wasi/release/wasm_s3_sink.wasm"

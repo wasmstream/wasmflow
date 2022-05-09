@@ -1,4 +1,6 @@
 wit_bindgen_wasmtime::import!({ paths: ["./wit/record-processor.wit"], async: *});
+use std::path::PathBuf;
+
 use anyhow::Context;
 pub use record_processor::{FlowRecord, RecordProcessor, RecordProcessorData};
 use rskafka::record::RecordAndOffset;
@@ -25,7 +27,7 @@ pub struct FlowState<T> {
 }
 
 impl<T: S3Sink> FlowProcessor<T> {
-    pub fn new(filename: &str, s3_sink: T) -> Self {
+    pub fn new(filename: &PathBuf, s3_sink: T) -> Self {
         let mut config = Config::new();
         config.wasm_multi_memory(true);
         config.wasm_module_linking(true);
@@ -33,7 +35,7 @@ impl<T: S3Sink> FlowProcessor<T> {
         let engine = Engine::new(&config).expect("Could not create a new Wasmtime engine.");
         let mut linker: Linker<FlowState<T>> = Linker::new(&engine);
         let module = Module::from_file(&engine, filename)
-            .with_context(|| format!("Could not create module: {filename}"))
+            .with_context(|| format!("Could not create module: {filename:?}"))
             .unwrap();
         wasmtime_wasi::add_to_linker(&mut linker, |s| s.wasi.as_mut().unwrap())
             .expect("Failed to add wasi linker.");

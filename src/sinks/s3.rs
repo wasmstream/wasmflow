@@ -1,3 +1,5 @@
+use crate::conf;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::{types::ByteStream, Client, Region};
@@ -11,15 +13,21 @@ pub struct S3Writer {
 }
 
 impl S3Writer {
-    pub async fn new(bucket: &str, region: &str) -> anyhow::Result<Self> {
-        let region_provider =
-            RegionProviderChain::first_try(Region::new(region.to_string())).or_default_provider();
-        let shared_config = aws_config::from_env().region(region_provider).load().await;
-        let client = Client::new(&shared_config);
-        Ok(Self {
-            bucket: bucket.to_string(),
-            client,
-        })
+    pub async fn new(cfg: &conf::Sink) -> anyhow::Result<Self> {
+        match cfg {
+            conf::Sink::S3 { region, bucket } => {
+                let region_provider =
+                    RegionProviderChain::first_try(Region::new(region.to_string()))
+                        .or_default_provider();
+                let shared_config = aws_config::from_env().region(region_provider).load().await;
+                let client = Client::new(&shared_config);
+                Ok(Self {
+                    bucket: bucket.to_string(),
+                    client,
+                })
+            }
+            conf::Sink::None => Err(anyhow!("Cannot create S3Writer when sink is None")),
+        }
     }
 }
 

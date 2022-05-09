@@ -38,13 +38,12 @@ impl s3_sink::S3Sink for S3Writer {
                 .await
                 .unwrap();
         } */
-        let v = Vec::from(body);
         let _resp = self
             .client
             .put_object()
             .bucket(self.bucket.to_string())
             .key(key)
-            .body(ByteStream::from(v))
+            .body(ByteStream::from(bytes::Bytes::copy_from_slice(body)))
             .send()
             .await
             .unwrap();

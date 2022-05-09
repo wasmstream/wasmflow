@@ -26,7 +26,8 @@ impl S3Writer {
 #[async_trait]
 impl s3_sink::S3Sink for S3Writer {
     async fn write(&mut self, key: &str, body: &[u8]) -> s3_sink::Status {
-        /*         unsafe {
+        /*
+        unsafe {
             let v = Vec::from_raw_parts(body.as_ptr() as *mut _, body.len(), body.len());
             let _resp = self
                 .client
@@ -37,7 +38,8 @@ impl s3_sink::S3Sink for S3Writer {
                 .send()
                 .await
                 .unwrap();
-        } */
+        }
+        */
         let _resp = self
             .client
             .put_object()

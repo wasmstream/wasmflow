@@ -7,31 +7,31 @@ use wasi_common::WasiCtx;
 use wasmtime::*;
 use wasmtime_wasi::WasiCtxBuilder;
 
-use crate::{sinks::s3::S3Writer, sources::kafka::KafkaProcessor};
+use crate::{sinks::s3::s3_sink::S3Sink, sources::kafka::KafkaProcessor};
 
 #[derive(Clone)]
-pub struct FlowProcessor {
+pub struct FlowProcessor<T> {
     pub engine: Engine,
-    pub linker: Linker<FlowState>,
+    pub linker: Linker<FlowState<T>>,
     pub module: Module,
-    pub s3_sink: S3Writer,
+    pub s3_sink: T,
 }
 
 #[derive(Default)]
-pub struct FlowState {
+pub struct FlowState<T> {
     pub wasi: Option<WasiCtx>,
     pub data: RecordProcessorData,
-    pub s3_sink: Option<S3Writer>,
+    pub s3_sink: Option<T>,
 }
 
-impl FlowProcessor {
-    pub fn new(filename: &str, s3_sink: crate::sinks::s3::S3Writer) -> Self {
+impl<T: S3Sink> FlowProcessor<T> {
+    pub fn new(filename: &str, s3_sink: T) -> Self {
         let mut config = Config::new();
         config.wasm_multi_memory(true);
         config.wasm_module_linking(true);
         config.async_support(true);
         let engine = Engine::new(&config).expect("Could not create a new Wasmtime engine.");
-        let mut linker: Linker<FlowState> = Linker::new(&engine);
+        let mut linker: Linker<FlowState<T>> = Linker::new(&engine);
         let module = Module::from_file(&engine, filename)
             .with_context(|| format!("Could not create module: {filename}"))
             .unwrap();
@@ -49,7 +49,7 @@ impl FlowProcessor {
 }
 
 #[async_trait::async_trait]
-impl KafkaProcessor for FlowProcessor {
+impl<T: S3Sink + Clone + Sync> KafkaProcessor for FlowProcessor<T> {
     async fn process_records(
         &self,
         _topic: &str,
@@ -99,8 +99,8 @@ impl KafkaProcessor for FlowProcessor {
     }
 }
 
-impl FlowState {
-    pub fn new(s3_sink: S3Writer) -> Self {
+impl<T: S3Sink> FlowState<T> {
+    pub fn new(s3_sink: T) -> Self {
         Self {
             wasi: Some(
                 WasiCtxBuilder::new()

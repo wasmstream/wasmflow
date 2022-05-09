@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{self, Formatter};
 use std::fs;
 use std::path::PathBuf;
+use tracing::info;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OffsetAt")]
@@ -66,5 +67,6 @@ pub fn read_config() -> Result<FlowConfig> {
         .with_context(|| format!("Error reading conf file {fname}"))?;
     let conf: FlowConfig = serde_yaml::from_str(&yaml_str)
         .with_context(|| format!("Error parsing YAML conf file {fname}"))?;
+    info!(conf=?conf);
     Ok(conf)
 }

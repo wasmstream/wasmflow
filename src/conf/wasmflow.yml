@@ -1,9 +1,9 @@
 sources:
   - Kafka:
       brokers:
-        - "foo:port"
+        - "my-broker.confluent.cloud:9092"
       topic: my-topic
-      batch_size: 1000
+      batch_size: 1000000
       offset: Earliest
       sasl:
         Plain:

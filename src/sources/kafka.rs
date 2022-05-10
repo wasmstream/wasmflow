@@ -24,6 +24,8 @@ pub trait KafkaProcessor {
 pub struct KafkaStream<T> {
     client: Client,
     topic: Topic,
+    batch_size: i32,
+    offset: OffsetAt,
     processor: T,
 }
 
@@ -36,8 +38,8 @@ where
             conf::Source::Kafka {
                 brokers,
                 topic,
-                batch_size: _,
-                offset: _,
+                batch_size,
+                offset,
                 sasl,
             } => {
                 let client = Self::init_client(brokers, sasl).await?;
@@ -54,6 +56,8 @@ where
                 Ok(KafkaStream {
                     client,
                     topic: matched_topic,
+                    batch_size: *batch_size,
+                    offset: *offset,
                     processor,
                 })
             }
@@ -65,6 +69,8 @@ where
         for partition in self.topic.partitions.iter() {
             let partition_id = *partition;
             let topic_name = self.topic.name.clone();
+            let offset_type = self.offset;
+            let batch_size = self.batch_size;
             let partition_client = self
                 .client
                 .partition_client(topic_name.clone(), partition_id)
@@ -72,16 +78,13 @@ where
                 .with_context(|| format!("Error creating client for partition {partition_id}"))?;
             let callback = self.processor.clone();
             let handle = tokio::spawn(async move {
-                let mut offset = partition_client
-                    .get_offset(OffsetAt::Earliest)
-                    .await
-                    .unwrap();
+                let mut offset = partition_client.get_offset(offset_type).await.unwrap();
                 loop {
                     let result = partition_client
                         .fetch_records(
-                            offset,       // offset
-                            1..1_000_000, // min..max bytes
-                            1_000,        // max wait time
+                            offset,        // offset
+                            1..batch_size, // min..max bytes
+                            1_000,         // max wait time
                         )
                         .await
                         .with_context(|| {

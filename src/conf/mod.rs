@@ -35,7 +35,7 @@ pub enum Source {
     Kafka {
         brokers: Vec<String>,
         topic: String,
-        batch_size: i64,
+        batch_size: i32,
         #[serde(with = "OffsetAtDef")]
         offset: OffsetAt,
         sasl: SaslConfig,

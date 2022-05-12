@@ -30,6 +30,7 @@ serde = "1.0"
 serde_yaml = "0.8"
 educe = "0.4.19"
 futures = "0.3.21"
+chrono = "0.4.19"
 
 [workspace]
 members = ["crates/wasm-record-printer", "crates/wasm-s3-sink"]

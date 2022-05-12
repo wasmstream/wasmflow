@@ -15,9 +15,7 @@ impl record_processor::RecordProcessor for RecordProcessor {
         println!("WASM Key - {key}");
         println!("WASM Value - {val}");
         println!("WASM Offset - {}", rec.offset);
-        let s3_key = format!("{}-{}", key.replace('.', "-"), rec.offset);
-        println!("Writing to S3 Key - {s3_key}");
-        let res = s3_sink::write(&s3_key, val.as_bytes());
+        let res = s3_sink::write(val.as_bytes());
         if res == s3_sink::Status::Error {
             return Status::Error;
         }

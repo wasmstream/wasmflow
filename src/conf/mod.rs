@@ -45,7 +45,11 @@ pub enum Source {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Sink {
     None,
-    S3 { region: String, bucket: String },
+    S3 {
+        region: String,
+        bucket: String,
+        key_prefix: String,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]

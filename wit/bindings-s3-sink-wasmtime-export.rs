@@ -16,7 +16,7 @@ pub mod s3_sink {
         }
     }
     pub trait S3Sink: Sized {
-        fn write(&mut self, key: &str, body: &[u8]) -> Status;
+        fn write(&mut self, body: &[u8]) -> Status;
     }
 
     pub fn add_to_linker<T, U>(
@@ -30,22 +30,15 @@ pub mod s3_sink {
         linker.func_wrap(
             "s3-sink",
             "write",
-            move |mut caller: wasmtime::Caller<'_, T>,
-                  arg0: i32,
-                  arg1: i32,
-                  arg2: i32,
-                  arg3: i32| {
+            move |mut caller: wasmtime::Caller<'_, T>, arg0: i32, arg1: i32| {
                 let memory = &get_memory(&mut caller, "memory")?;
                 let (mem, data) = memory.data_and_store_mut(&mut caller);
                 let mut _bc = wit_bindgen_wasmtime::BorrowChecker::new(mem);
                 let host = get(data);
                 let ptr0 = arg0;
                 let len0 = arg1;
-                let ptr1 = arg2;
-                let len1 = arg3;
-                let param0 = _bc.slice_str(ptr0, len0)?;
-                let param1 = _bc.slice(ptr1, len1)?;
-                let result = host.write(param0, param1);
+                let param0 = _bc.slice(ptr0, len0)?;
+                let result = host.write(param0);
                 Ok(result as i32)
             },
         )?;

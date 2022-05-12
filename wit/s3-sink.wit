@@ -3,4 +3,4 @@ enum status {
     error
 }
 
-write: function(key: string, body: list<u8>) -> status
+write: function(body: list<u8>) -> status

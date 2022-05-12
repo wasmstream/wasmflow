@@ -43,7 +43,7 @@ pub mod record_processor {
     get_state: Box<dyn Fn(&mut T) -> &mut RecordProcessorData + Send + Sync>,
     canonical_abi_realloc: wasmtime::TypedFunc<(i32, i32, i32, i32), i32>,
     memory: wasmtime::Memory,
-    process_records: wasmtime::TypedFunc<(i32,i32,), (i32,)>,
+    process_record: wasmtime::TypedFunc<(i32,i32,i32,i32,i32,i32,i32,i32,i64,), (i32,)>,
   }
   impl<T: Send> RecordProcessor<T> {
     #[allow(unused_variables)]
@@ -107,80 +107,63 @@ pub mod record_processor {
         anyhow::anyhow!("`memory` export not a memory")
       })?
       ;
-      let process_records= instance.get_typed_func::<(i32,i32,), (i32,), _>(&mut store, "process-records")?;
+      let process_record= instance.get_typed_func::<(i32,i32,i32,i32,i32,i32,i32,i32,i64,), (i32,), _>(&mut store, "process-record")?;
       Ok(RecordProcessor{
         canonical_abi_realloc,
         memory,
-        process_records,
+        process_record,
         get_state: Box::new(get_state),
         
       })
     }
-    pub async fn process_records(&self, mut caller: impl wasmtime::AsContextMut<Data = T>,recs: &[FlowRecord<'_,>],)-> Result<Status, wasmtime::Trap> {
+    pub async fn process_record(&self, mut caller: impl wasmtime::AsContextMut<Data = T>,rec: FlowRecord<'_,>,)-> Result<Status, wasmtime::Trap> {
       let func_canonical_abi_realloc = &self.canonical_abi_realloc;
       let memory = &self.memory;
-      let vec7 = recs;
-      let len7 = vec7.len() as i32;
-      let result7 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 8, len7 * 40)).await?;
-      for (i, e) in vec7.into_iter().enumerate() {
-        let base = result7 + (i as i32) * 40;
+      let FlowRecord{ key:key0, value:value0, headers:headers0, offset:offset0, } = rec;
+      let (result2_0,result2_1,result2_2,) = match key0{
+        None => { (0i32, 0i32, 0i32)}
+        Some(e) => { {
+          let vec1 = e;
+          let ptr1 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 1, (vec1.len() as i32) * 1)).await?;
+          memory.data_mut(&mut caller).store_many(ptr1, &vec1)?;
+          (1i32, ptr1, vec1.len() as i32)
+        }}
+      };
+      let (result4_0,result4_1,result4_2,) = match value0{
+        None => { (0i32, 0i32, 0i32)}
+        Some(e) => { {
+          let vec3 = e;
+          let ptr3 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 1, (vec3.len() as i32) * 1)).await?;
+          memory.data_mut(&mut caller).store_many(ptr3, &vec3)?;
+          (1i32, ptr3, vec3.len() as i32)
+        }}
+      };
+      let vec8 = headers0;
+      let len8 = vec8.len() as i32;
+      let result8 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 4, len8 * 16)).await?;
+      for (i, e) in vec8.into_iter().enumerate() {
+        let base = result8 + (i as i32) * 16;
         {
-          let FlowRecord{ key:key0, value:value0, headers:headers0, offset:offset0, } = e;
-          match key0{
-            None => { {
-              memory.data_mut(&mut caller).store(base + 0, wit_bindgen_wasmtime::rt::as_i32(0i32) as u8)?;
-            }}
-            Some(e) => { {
-              memory.data_mut(&mut caller).store(base + 0, wit_bindgen_wasmtime::rt::as_i32(1i32) as u8)?;
-              let vec1 = e;
-              let ptr1 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 1, (vec1.len() as i32) * 1)).await?;
-              memory.data_mut(&mut caller).store_many(ptr1, &vec1)?;
-              memory.data_mut(&mut caller).store(base + 8, wit_bindgen_wasmtime::rt::as_i32(vec1.len() as i32))?;
-              memory.data_mut(&mut caller).store(base + 4, wit_bindgen_wasmtime::rt::as_i32(ptr1))?;
-            }}
-          };
-          match value0{
-            None => { {
-              memory.data_mut(&mut caller).store(base + 12, wit_bindgen_wasmtime::rt::as_i32(0i32) as u8)?;
-            }}
-            Some(e) => { {
-              memory.data_mut(&mut caller).store(base + 12, wit_bindgen_wasmtime::rt::as_i32(1i32) as u8)?;
-              let vec2 = e;
-              let ptr2 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 1, (vec2.len() as i32) * 1)).await?;
-              memory.data_mut(&mut caller).store_many(ptr2, &vec2)?;
-              memory.data_mut(&mut caller).store(base + 20, wit_bindgen_wasmtime::rt::as_i32(vec2.len() as i32))?;
-              memory.data_mut(&mut caller).store(base + 16, wit_bindgen_wasmtime::rt::as_i32(ptr2))?;
-            }}
-          };
-          let vec6 = headers0;
-          let len6 = vec6.len() as i32;
-          let result6 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 4, len6 * 16)).await?;
-          for (i, e) in vec6.into_iter().enumerate() {
-            let base = result6 + (i as i32) * 16;
-            {
-              let (t3_0, t3_1, ) = e;
-              let vec4 = t3_0;
-              let ptr4 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 1, vec4.len() as i32)).await?;
-              memory.data_mut(&mut caller).store_many(ptr4, vec4.as_bytes())?;
-              memory.data_mut(&mut caller).store(base + 4, wit_bindgen_wasmtime::rt::as_i32(vec4.len() as i32))?;
-              memory.data_mut(&mut caller).store(base + 0, wit_bindgen_wasmtime::rt::as_i32(ptr4))?;
-              let vec5 = t3_1;
-              let ptr5 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 1, (vec5.len() as i32) * 1)).await?;
-              memory.data_mut(&mut caller).store_many(ptr5, &vec5)?;
-              memory.data_mut(&mut caller).store(base + 12, wit_bindgen_wasmtime::rt::as_i32(vec5.len() as i32))?;
-              memory.data_mut(&mut caller).store(base + 8, wit_bindgen_wasmtime::rt::as_i32(ptr5))?;
-            }}memory.data_mut(&mut caller).store(base + 28, wit_bindgen_wasmtime::rt::as_i32(len6))?;
-            memory.data_mut(&mut caller).store(base + 24, wit_bindgen_wasmtime::rt::as_i32(result6))?;
-            memory.data_mut(&mut caller).store(base + 32, wit_bindgen_wasmtime::rt::as_i64(wit_bindgen_wasmtime::rt::as_i64(offset0)))?;
-          }}let (result8_0,) = self.process_records.call_async(&mut caller, (result7, len7, )).await?;
-          Ok(match result8_0 {
-            0 => Status::Ok,
-            1 => Status::Error,
-            _ => return Err(invalid_variant("Status")),
-          })
-        }
+          let (t5_0, t5_1, ) = e;
+          let vec6 = t5_0;
+          let ptr6 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 1, vec6.len() as i32)).await?;
+          memory.data_mut(&mut caller).store_many(ptr6, vec6.as_bytes())?;
+          memory.data_mut(&mut caller).store(base + 4, wit_bindgen_wasmtime::rt::as_i32(vec6.len() as i32))?;
+          memory.data_mut(&mut caller).store(base + 0, wit_bindgen_wasmtime::rt::as_i32(ptr6))?;
+          let vec7 = t5_1;
+          let ptr7 = func_canonical_abi_realloc.call_async(&mut caller, (0, 0, 1, (vec7.len() as i32) * 1)).await?;
+          memory.data_mut(&mut caller).store_many(ptr7, &vec7)?;
+          memory.data_mut(&mut caller).store(base + 12, wit_bindgen_wasmtime::rt::as_i32(vec7.len() as i32))?;
+          memory.data_mut(&mut caller).store(base + 8, wit_bindgen_wasmtime::rt::as_i32(ptr7))?;
+        }}let (result9_0,) = self.process_record.call_async(&mut caller, (result2_0, result2_1, result2_2, result4_0, result4_1, result4_2, result8, len8, wit_bindgen_wasmtime::rt::as_i64(offset0), )).await?;
+        Ok(match result9_0 {
+          0 => Status::Ok,
+          1 => Status::Error,
+          _ => return Err(invalid_variant("Status")),
+        })
       }
-      use wit_bindgen_wasmtime::rt::RawMem;
-      use wit_bindgen_wasmtime::rt::invalid_variant;
     }
-    
+    use wit_bindgen_wasmtime::rt::RawMem;
+    use wit_bindgen_wasmtime::rt::invalid_variant;
+  }
+  

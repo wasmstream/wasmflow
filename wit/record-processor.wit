@@ -10,4 +10,4 @@ record flow-record {
     offset: s64
 }
 
-process-records: function(recs: list<flow-record>) -> status
+process-record: function(rec: flow-record) -> status

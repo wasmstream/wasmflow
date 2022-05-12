@@ -2546,6 +2546,7 @@ dependencies = [
  "aws-types",
  "bytes",
  "educe",
+ "futures",
  "rskafka",
  "rustls 0.20.4",
  "serde",

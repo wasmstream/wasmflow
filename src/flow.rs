@@ -2,117 +2,107 @@ wit_bindgen_wasmtime::import!({ paths: ["./wit/record-processor.wit"], async: *}
 use std::path::PathBuf;
 
 use anyhow::Context;
-pub use record_processor::{FlowRecord, RecordProcessor, RecordProcessorData};
-use rskafka::record::RecordAndOffset;
+use record_processor::{FlowRecord, RecordProcessorData};
 use tracing::info;
 use wasi_common::WasiCtx;
 use wasmtime::*;
 use wasmtime_wasi::WasiCtxBuilder;
 
-use crate::{sinks::s3::s3_sink::S3Sink, sources::kafka::KafkaProcessor};
+use futures::stream::StreamExt;
 
-#[derive(Clone)]
-pub struct FlowProcessor<T> {
+use crate::{sinks::s3::S3Writer, sources::kafka::KafkaStream};
+
+pub struct FlowProcessor {
     pub engine: Engine,
-    pub linker: Linker<FlowState<T>>,
+    pub linker: Linker<FlowState>,
     pub module: Module,
-    pub s3_sink: T,
+    pub source: KafkaStream,
+    pub s3_writer: S3Writer,
 }
 
-#[derive(Default)]
-pub struct FlowState<T> {
-    pub wasi: Option<WasiCtx>,
+pub struct FlowState {
+    pub wasi: WasiCtx,
     pub data: RecordProcessorData,
-    pub s3_sink: Option<T>,
+    pub s3_writer: S3Writer,
 }
 
-impl<T: S3Sink> FlowProcessor<T> {
-    pub fn new(filename: &PathBuf, s3_sink: T) -> Self {
+impl FlowProcessor {
+    pub fn new(filename: &PathBuf, source: KafkaStream, s3_writer: S3Writer) -> Self {
         let mut config = Config::new();
         config.wasm_multi_memory(true);
         config.wasm_module_linking(true);
         config.async_support(true);
         let engine = Engine::new(&config).expect("Could not create a new Wasmtime engine.");
-        let mut linker: Linker<FlowState<T>> = Linker::new(&engine);
+        let mut linker: Linker<FlowState> = Linker::new(&engine);
         let module = Module::from_file(&engine, filename)
             .with_context(|| format!("Could not create module: {filename:?}"))
             .unwrap();
-        wasmtime_wasi::add_to_linker(&mut linker, |s| s.wasi.as_mut().unwrap())
+        wasmtime_wasi::add_to_linker(&mut linker, |s| &mut s.wasi)
             .expect("Failed to add wasi linker.");
-        crate::sinks::s3::s3_sink::add_to_linker(&mut linker, |s| s.s3_sink.as_mut().unwrap())
+        crate::sinks::s3::s3_sink::add_to_linker(&mut linker, |s| &mut s.s3_writer)
             .expect("Failed to add s3_sink");
         Self {
             engine,
             linker,
             module,
-            s3_sink,
+            source,
+            s3_writer,
         }
     }
-}
 
-#[async_trait::async_trait]
-impl<T: S3Sink + Clone + Sync> KafkaProcessor for FlowProcessor<T> {
-    async fn process_records(
-        &self,
-        _topic: &str,
-        _partition_id: i32,
-        recs: Vec<RecordAndOffset>,
-        _high_watermark: i64,
-    ) -> anyhow::Result<()> {
-        let flow_state = FlowState::new(self.s3_sink.clone());
-        let mut store = Store::new(&self.engine, flow_state);
-        let (wasm_rec_proc, _) = record_processor::RecordProcessor::instantiate(
-            store.as_context_mut(),
-            &self.module,
-            &mut self.linker.clone(),
-            |s| &mut s.data,
-        )
-        .await
-        .with_context(|| "Could not create WASM instance.")?;
-
-        let rec_headers: Vec<Vec<(&str, &[u8])>> = recs
-            .iter()
-            .map(|r| {
-                r.record
+    pub async fn start(&self) -> anyhow::Result<()> {
+        let streams = self
+            .source
+            .streams()
+            .await
+            .with_context(|| "Error creating a combined stream of partitions.")?;
+        streams
+            .for_each_concurrent(None, |r| async move {
+                let flow_state = FlowState::new(self.s3_writer.clone());
+                let mut store = Store::new(&self.engine, flow_state);
+                let (wasm_rec_proc, _) = record_processor::RecordProcessor::instantiate(
+                    store.as_context_mut(),
+                    &self.module,
+                    &mut self.linker.clone(),
+                    |s| &mut s.data,
+                )
+                .await
+                .expect("Could not create WASM instance.");
+                let rec = r.expect("Could not get a record.");
+                let headers: Vec<(&str, &[u8])> = rec
+                    .0
+                    .record
                     .headers
                     .iter()
                     .map(|(k, v)| (k.as_str(), v.as_slice()))
-                    .collect()
+                    .collect();
+                let frec = FlowRecord {
+                    key: rec.0.record.key.as_deref(),
+                    value: rec.0.record.value.as_deref(),
+                    headers: &headers,
+                    offset: rec.1,
+                };
+                let resp = wasm_rec_proc
+                    .process_record(store.as_context_mut(), frec)
+                    .await
+                    .expect("Error invoking WASM function.");
+                info!(wasm_output = ?resp);
             })
-            .collect();
-
-        let frecs: Vec<FlowRecord> = recs
-            .iter()
-            .zip(rec_headers.iter())
-            .map(|(r, h)| FlowRecord {
-                key: r.record.key.as_deref(),
-                value: r.record.value.as_deref(),
-                headers: h,
-                offset: r.offset,
-            })
-            .collect();
-
-        let resp = wasm_rec_proc
-            .process_records(store.as_context_mut(), &frecs)
-            .await
-            .with_context(|| "Error invoking WASM function.")?;
-        info!(wasm_output = ?resp);
+            .await;
         Ok(())
     }
 }
 
-impl<T: S3Sink> FlowState<T> {
-    pub fn new(s3_sink: T) -> Self {
+impl FlowState {
+    pub fn new(s3_writer: S3Writer) -> Self {
         Self {
-            wasi: Some(
-                WasiCtxBuilder::new()
-                    .inherit_stdio()
-                    .inherit_args()
-                    .expect("Could not initialize WASI")
-                    .build(),
-            ),
+            wasi: WasiCtxBuilder::new()
+                .inherit_stdio()
+                .inherit_args()
+                .expect("Could not initialize WASI")
+                .build(),
             data: RecordProcessorData {},
-            s3_sink: Some(s3_sink),
+            s3_writer,
         }
     }
 }

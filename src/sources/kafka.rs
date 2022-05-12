@@ -70,19 +70,18 @@ impl KafkaStreamBuilder {
     }
 
     async fn init_client(brokers: &[String], sasl: &conf::SaslConfig) -> anyhow::Result<Client> {
-        match sasl {
-            conf::SaslConfig::None => Ok(ClientBuilder::new(brokers.to_vec()).build().await?),
-            conf::SaslConfig::Plain { username, password } => {
-                Ok(ClientBuilder::new(brokers.to_vec())
-                    .tls_config(Arc::new(Self::create_tls_config()))
-                    .sasl_config(SaslConfig::Plain {
-                        username: username.to_string(),
-                        password: password.to_string(),
-                    })
-                    .build()
-                    .await?)
-            }
+        let mut c = ClientBuilder::new(brokers.to_vec());
+        if let conf::SaslConfig::Plain { username, password } = sasl {
+            c = c
+                .tls_config(Arc::new(Self::create_tls_config()))
+                .sasl_config(SaslConfig::Plain {
+                    username: username.to_string(),
+                    password: password.to_string(),
+                });
         }
+        c.build()
+            .await
+            .with_context(|| "Error initializing Kafka client.")
     }
 
     fn create_tls_config() -> rustls::ClientConfig {

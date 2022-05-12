@@ -7,7 +7,9 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-rskafka = { path = "../rskafka", features = ["full"] }
+rskafka = { git = "https://github.com/ramrengaswamy/rskafka.git", rev = "655914866318cf2685998a2ccaf54737b74c54e5", features = [
+    "full",
+] }
 webpki-roots = "0.22.0"
 rustls = "0.20.4"
 tracing = "0.1"

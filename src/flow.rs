@@ -10,13 +10,13 @@ use wasmtime_wasi::WasiCtxBuilder;
 
 use futures::stream::StreamExt;
 
-use crate::{sinks::s3::S3Writer, sources::kafka::KafkaStream};
+use crate::{sinks::s3::S3Writer, sources::kafka::KafkaStreamBuilder};
 
 pub struct FlowProcessor {
     pub engine: Engine,
     pub linker: Linker<FlowState>,
     pub module: Module,
-    pub source: KafkaStream,
+    pub stream_builder: KafkaStreamBuilder,
     pub s3_writer: S3Writer,
 }
 
@@ -27,7 +27,11 @@ pub struct FlowState {
 }
 
 impl FlowProcessor {
-    pub fn new(filename: &PathBuf, source: KafkaStream, s3_writer: S3Writer) -> Self {
+    pub fn new(
+        filename: &PathBuf,
+        stream_builder: KafkaStreamBuilder,
+        s3_writer: S3Writer,
+    ) -> Self {
         let mut config = Config::new();
         config.wasm_multi_memory(true);
         config.wasm_module_linking(true);
@@ -45,15 +49,15 @@ impl FlowProcessor {
             engine,
             linker,
             module,
-            source,
+            stream_builder,
             s3_writer,
         }
     }
 
-    pub async fn start(&self) -> anyhow::Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         let streams = self
-            .source
-            .streams()
+            .stream_builder
+            .build()
             .await
             .with_context(|| "Error creating a combined stream of partitions.")?;
         streams

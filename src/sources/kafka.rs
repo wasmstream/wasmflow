@@ -10,14 +10,14 @@ use tracing::info;
 
 use crate::conf;
 
-pub struct KafkaStream {
+pub struct KafkaStreamBuilder {
     client: Client,
     topic: Topic,
     batch_size: i32,
     offset: OffsetAt,
 }
 
-impl KafkaStream {
+impl KafkaStreamBuilder {
     pub async fn new(cfg: &conf::Source) -> anyhow::Result<Self> {
         match cfg {
             conf::Source::Kafka {
@@ -38,7 +38,8 @@ impl KafkaStream {
                     .find(|t| t.name == *topic)
                     .ok_or_else(|| anyhow!("Could not find topic {topic}"))?;
                 info!(topic = ?matched_topic);
-                Ok(KafkaStream {
+
+                Ok(KafkaStreamBuilder {
                     client,
                     topic: matched_topic,
                     batch_size: *batch_size,
@@ -48,13 +49,12 @@ impl KafkaStream {
         }
     }
 
-    pub async fn streams(&self) -> anyhow::Result<SelectAll<StreamConsumer>> {
+    pub async fn build(&self) -> anyhow::Result<SelectAll<StreamConsumer>> {
         let mut streams: SelectAll<StreamConsumer> = SelectAll::new();
         for partition_id in self.topic.partitions.iter() {
             let partition_client = self
                 .client
                 .partition_client(self.topic.name.to_string(), *partition_id)
-                .await
                 .with_context(|| format!("Error creating client for partition {partition_id}"))?;
             let start_offset = match self.offset {
                 OffsetAt::Earliest => StartOffset::Earliest,

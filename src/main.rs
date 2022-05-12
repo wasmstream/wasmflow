@@ -1,3 +1,4 @@
+use anyhow::Context;
 use wasmflow::{flow::FlowProcessor, sinks::s3::S3Writer, sources::kafka::KafkaStreamBuilder};
 
 #[tokio::main]
@@ -10,7 +11,8 @@ async fn main() -> anyhow::Result<()> {
         &conf.processors[0].module_path,
         source_stream_builder,
         s3_sink,
-    );
+    )
+    .with_context(|| "Could not initialize WASM Flow")?;
     wasm_flow.run().await?;
     Ok(())
 }

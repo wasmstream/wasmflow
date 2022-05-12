@@ -3,6 +3,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::{types::ByteStream, Client, Region};
+use tracing::error;
 
 wit_bindgen_wasmtime::export!({ paths: ["wit/s3-sink.wit"], async: * });
 
@@ -48,15 +49,20 @@ impl s3_sink::S3Sink for S3Writer {
                 .unwrap();
         }
         */
-        let _resp = self
+        let resp = self
             .client
             .put_object()
             .bucket(self.bucket.to_string())
             .key(key)
             .body(ByteStream::from(bytes::Bytes::copy_from_slice(body)))
             .send()
-            .await
-            .unwrap();
-        s3_sink::Status::Ok
+            .await;
+        match resp {
+            Ok(_p) => s3_sink::Status::Ok,
+            Err(e) => {
+                error!(s3_sink_error=?e);
+                s3_sink::Status::Error
+            }
+        }
     }
 }

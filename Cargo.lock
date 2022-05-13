@@ -2573,6 +2573,7 @@ dependencies = [
  "chrono",
  "educe",
  "futures",
+ "pin-project",
  "rskafka",
  "rustls 0.20.4",
  "serde",

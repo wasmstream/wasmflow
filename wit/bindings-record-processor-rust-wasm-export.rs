@@ -18,7 +18,10 @@ mod record_processor {
         pub key: Option<Vec<u8>>,
         pub value: Option<Vec<u8>>,
         pub headers: Vec<(String, Vec<u8>)>,
+        pub topic: String,
+        pub partition: i32,
         pub offset: i64,
+        pub timestamp: i64,
     }
     impl std::fmt::Debug for FlowRecord {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -26,7 +29,10 @@ mod record_processor {
                 .field("key", &self.key)
                 .field("value", &self.value)
                 .field("headers", &self.headers)
+                .field("topic", &self.topic)
+                .field("partition", &self.partition)
                 .field("offset", &self.offset)
+                .field("timestamp", &self.timestamp)
                 .finish()
         }
     }
@@ -40,7 +46,11 @@ mod record_processor {
         arg5: i32,
         arg6: i32,
         arg7: i32,
-        arg8: i64,
+        arg8: i32,
+        arg9: i32,
+        arg10: i32,
+        arg11: i64,
+        arg12: i64,
     ) -> i32 {
         let base4 = arg6;
         let len4 = arg7;
@@ -66,6 +76,7 @@ mod record_processor {
             base4 as *mut _,
             std::alloc::Layout::from_size_align_unchecked((len4 as usize) * 16, 4),
         );
+        let len5 = arg9 as usize;
         let result = <super::RecordProcessor as RecordProcessor>::process_record(FlowRecord {
             key: match arg0 {
                 0 => None,
@@ -86,7 +97,10 @@ mod record_processor {
                 _ => panic!("invalid enum discriminant"),
             },
             headers: result4,
-            offset: arg8,
+            topic: String::from_utf8(Vec::from_raw_parts(arg8 as *mut _, len5, len5)).unwrap(),
+            partition: arg10,
+            offset: arg11,
+            timestamp: arg12,
         });
         result as i32
     }

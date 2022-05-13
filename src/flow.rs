@@ -61,7 +61,6 @@ impl FlowProcessor {
             .await
             .with_context(|| "Error creating a combined stream of partitions.")?;
         streams
-            .map_err(anyhow::Error::new)
             .try_for_each_concurrent(None, |rec| async move {
                 let flow_state = FlowState::new(self.s3_writer.clone())
                     .with_context(|| "Error initializing flow state")?;
@@ -75,17 +74,19 @@ impl FlowProcessor {
                 .await
                 .with_context(|| "Could not create WASM instance.")?;
                 let headers: Vec<(&str, &[u8])> = rec
-                    .0
                     .record
                     .headers
                     .iter()
                     .map(|(k, v)| (k.as_str(), v.as_slice()))
                     .collect();
                 let frec = FlowRecord {
-                    key: rec.0.record.key.as_deref(),
-                    value: rec.0.record.value.as_deref(),
+                    key: rec.record.key.as_deref(),
+                    value: rec.record.value.as_deref(),
                     headers: &headers,
-                    offset: rec.1,
+                    topic: self.stream_builder.topic_name(),
+                    partition: rec.partition,
+                    offset: rec.offset,
+                    timestamp: rec.timestamp,
                 };
                 let resp = wasm_rec_proc
                     .process_record(store.as_context_mut(), frec)

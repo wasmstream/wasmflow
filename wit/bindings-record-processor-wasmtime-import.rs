@@ -20,7 +20,10 @@ pub mod record_processor {
         pub key: Option<&'a [u8]>,
         pub value: Option<&'a [u8]>,
         pub headers: &'a [(&'a str, &'a [u8])],
+        pub topic: &'a str,
+        pub partition: i32,
         pub offset: i64,
+        pub timestamp: i64,
     }
     impl<'a> std::fmt::Debug for FlowRecord<'a> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -28,7 +31,10 @@ pub mod record_processor {
                 .field("key", &self.key)
                 .field("value", &self.value)
                 .field("headers", &self.headers)
+                .field("topic", &self.topic)
+                .field("partition", &self.partition)
                 .field("offset", &self.offset)
+                .field("timestamp", &self.timestamp)
                 .finish()
         }
     }
@@ -44,7 +50,24 @@ pub mod record_processor {
         get_state: Box<dyn Fn(&mut T) -> &mut RecordProcessorData + Send + Sync>,
         canonical_abi_realloc: wasmtime::TypedFunc<(i32, i32, i32, i32), i32>,
         memory: wasmtime::Memory,
-        process_record: wasmtime::TypedFunc<(i32, i32, i32, i32, i32, i32, i32, i32, i64), (i32,)>,
+        process_record: wasmtime::TypedFunc<
+            (
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i64,
+                i64,
+            ),
+            (i32,),
+        >,
     }
     impl<T> RecordProcessor<T> {
         #[allow(unused_variables)]
@@ -108,11 +131,21 @@ pub mod record_processor {
             let memory = instance
                 .get_memory(&mut store, "memory")
                 .ok_or_else(|| anyhow::anyhow!("`memory` export not a memory"))?;
-            let process_record = instance
-                .get_typed_func::<(i32, i32, i32, i32, i32, i32, i32, i32, i64), (i32,), _>(
-                    &mut store,
-                    "process-record",
-                )?;
+            let process_record = instance.get_typed_func::<(
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                i64,
+                i64,
+            ), (i32,), _>(&mut store, "process-record")?;
             Ok(RecordProcessor {
                 canonical_abi_realloc,
                 memory,
@@ -131,7 +164,10 @@ pub mod record_processor {
                 key: key0,
                 value: value0,
                 headers: headers0,
+                topic: topic0,
+                partition: partition0,
                 offset: offset0,
+                timestamp: timestamp0,
             } = rec;
             let (result2_0, result2_1, result2_2) = match key0 {
                 None => (0i32, 0i32, 0i32),
@@ -186,7 +222,13 @@ pub mod record_processor {
                         .store(base + 8, wit_bindgen_wasmtime::rt::as_i32(ptr7))?;
                 }
             }
-            let (result9_0,) = self.process_record.call(
+            let vec9 = topic0;
+            let ptr9 =
+                func_canonical_abi_realloc.call(&mut caller, (0, 0, 1, vec9.len() as i32))?;
+            memory
+                .data_mut(&mut caller)
+                .store_many(ptr9, vec9.as_bytes())?;
+            let (result10_0,) = self.process_record.call(
                 &mut caller,
                 (
                     result2_0,
@@ -197,10 +239,14 @@ pub mod record_processor {
                     result4_2,
                     result8,
                     len8,
+                    ptr9,
+                    vec9.len() as i32,
+                    wit_bindgen_wasmtime::rt::as_i32(partition0),
                     wit_bindgen_wasmtime::rt::as_i64(offset0),
+                    wit_bindgen_wasmtime::rt::as_i64(timestamp0),
                 ),
             )?;
-            Ok(match result9_0 {
+            Ok(match result10_0 {
                 0 => Status::Ok,
                 1 => Status::Error,
                 _ => return Err(invalid_variant("Status")),

@@ -1,62 +1,14 @@
 use anyhow::{anyhow, Context};
-use futures::stream::SelectAll;
-use futures::Stream;
-use pin_project::pin_project;
+
 use rskafka::client::consumer::{StartOffset, StreamConsumer, StreamConsumerBuilder};
 use rskafka::client::partition::OffsetAt;
 use rskafka::client::{Client, ClientBuilder, SaslConfig};
-use rskafka::record::Record;
 use rskafka::topic::Topic;
 use rustls::{OwnedTrustAnchor, RootCertStore};
 use std::sync::Arc;
-use std::task::Poll;
 use tracing::info;
 
 use crate::conf;
-
-pub struct KafkaRecord {
-    pub record: Record,
-    pub offset: i64,
-    pub timestamp: i64,
-    pub partition: i32,
-}
-
-#[pin_project]
-pub struct KafkaPartitionStream {
-    #[pin]
-    inner: StreamConsumer,
-    partition_id: i32,
-}
-
-impl Stream for KafkaPartitionStream {
-    type Item = anyhow::Result<KafkaRecord>;
-
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        let this = self.project();
-        let p = this.inner.poll_next(cx);
-        match p {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(t) => match t {
-                None => Poll::Ready(None),
-                Some(r) => match r {
-                    Ok(v) => {
-                        let timestamp = v.0.record.timestamp.unix_timestamp();
-                        Poll::Ready(Some(Ok(KafkaRecord {
-                            record: v.0.record,
-                            offset: v.0.offset,
-                            timestamp,
-                            partition: *this.partition_id,
-                        })))
-                    }
-                    Err(e) => Poll::Ready(Some(Err(anyhow!(e)))),
-                },
-            },
-        }
-    }
-}
 
 pub struct KafkaStreamBuilder {
     client: Client,
@@ -97,8 +49,8 @@ impl KafkaStreamBuilder {
         }
     }
 
-    pub async fn build(&self) -> anyhow::Result<SelectAll<KafkaPartitionStream>> {
-        let mut streams: SelectAll<KafkaPartitionStream> = SelectAll::new();
+    pub async fn build(&self) -> anyhow::Result<Vec<(i32, StreamConsumer)>> {
+        let mut streams: Vec<(i32, StreamConsumer)> = vec![];
         for partition_id in self.topic.partitions.iter() {
             let partition_client = self
                 .client
@@ -108,12 +60,12 @@ impl KafkaStreamBuilder {
                 OffsetAt::Earliest => StartOffset::Earliest,
                 OffsetAt::Latest => StartOffset::Latest,
             };
-            streams.push(KafkaPartitionStream {
-                inner: StreamConsumerBuilder::new(Arc::new(partition_client), start_offset)
+            streams.push((
+                *partition_id,
+                StreamConsumerBuilder::new(Arc::new(partition_client), start_offset)
                     .with_max_batch_size(self.batch_size)
                     .build(),
-                partition_id: *partition_id,
-            });
+            ));
         }
         Ok(streams)
     }

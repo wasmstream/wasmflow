@@ -7,7 +7,7 @@ async fn main() -> anyhow::Result<()> {
     let conf = wasmflow::conf::read_config()?;
     let source_stream_builder = KafkaStreamBuilder::new(&conf.sources[0]).await?;
     let s3_sink = S3Writer::new(&conf.sinks[0]).await?;
-    let wasm_flow = FlowProcessor::new(
+    let mut wasm_flow = FlowProcessor::new(
         &conf.processors[0].module_path,
         source_stream_builder,
         s3_sink,

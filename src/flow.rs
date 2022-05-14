@@ -147,7 +147,7 @@ impl FlowProcessor {
         Ok(status)
     }
 
-    pub async fn run(&mut self) -> anyhow::Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         let kafka_streams = self
             .stream_builder
             .build()

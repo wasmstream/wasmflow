@@ -76,10 +76,11 @@ impl s3_sink::S3Sink for BufferedS3Sink {
             Some(buf) => {
                 let timestamp = chrono::Local::now();
                 let key = format!(
-                    "{}/{}/{}",
+                    "{}/{}/{}/{}",
                     self.key_prefix,
                     partition_id,
-                    timestamp.format("%Y-%m-%d-%H-%M-%S")
+                    timestamp.format("%Y/%m/%d/%H/%M/%S"),
+                    uuid::Uuid::new_v4()
                 );
                 debug!(s3_key=%key);
                 let resp = self

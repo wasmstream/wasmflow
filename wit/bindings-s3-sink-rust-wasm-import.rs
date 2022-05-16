@@ -13,7 +13,7 @@ mod s3_sink {
             }
         }
     }
-    pub fn write(body: &[u8]) -> Status {
+    pub fn write(partition: i32, body: &[u8]) -> Status {
         unsafe {
             let vec0 = body;
             let ptr0 = vec0.as_ptr() as i32;
@@ -22,9 +22,9 @@ mod s3_sink {
             extern "C" {
                 #[cfg_attr(target_arch = "wasm32", link_name = "write")]
                 #[cfg_attr(not(target_arch = "wasm32"), link_name = "s3-sink_write")]
-                fn wit_import(_: i32, _: i32) -> i32;
+                fn wit_import(_: i32, _: i32, _: i32) -> i32;
             }
-            let ret = wit_import(ptr0, len0);
+            let ret = wit_import(wit_bindgen_rust::rt::as_i32(partition), ptr0, len0);
             match ret {
                 0 => Status::Ok,
                 1 => Status::Error,

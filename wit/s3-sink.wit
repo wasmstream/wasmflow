@@ -3,4 +3,4 @@ enum status {
     error
 }
 
-write: function(body: list<u8>) -> status
+write: function(partition: s32, body: list<u8>) -> status

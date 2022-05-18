@@ -36,6 +36,7 @@ uuid = { version = "1.0.0", features = [
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ] }
+backoff = { version = "0.4.0", features = ["tokio"] }
 
 [workspace]
 members = ["crates/wasm-record-printer", "crates/wasm-s3-sink"]

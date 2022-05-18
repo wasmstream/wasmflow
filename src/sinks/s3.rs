@@ -2,19 +2,23 @@ use crate::conf;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_s3::{types::ByteStream, Client, Region};
+use aws_sdk_s3::{
+    types::{ByteStream, SdkError},
+    Client, Region,
+};
+use bytes::Bytes;
 use std::{
     collections::BTreeMap,
     ops::DerefMut,
     sync::{Arc, Mutex},
 };
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 wit_bindgen_wasmtime::export!({ paths: ["wit/s3-sink.wit"], async: * });
 
 const S3_BUFFER_SIZE_BYTES: usize = 4096;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BufferedS3Sink {
     bucket: String,
     key_prefix: String,
@@ -83,13 +87,32 @@ impl s3_sink::S3Sink for BufferedS3Sink {
                     uuid::Uuid::new_v4()
                 );
                 debug!(s3_key=%key);
-                let resp = self
-                    .client
-                    .put_object()
-                    .bucket(self.bucket.to_string())
-                    .key(key)
-                    .body(ByteStream::from(buf))
-                    .send()
+                let client = &self.client;
+                let bucket = self.bucket.as_str();
+                let bytes = &Bytes::from(buf);
+                let key = key.as_str();
+                let resp =
+                    backoff::future::retry(backoff::ExponentialBackoff::default(), || async move {
+                        let resp = client
+                            .put_object()
+                            .bucket(bucket.to_string())
+                            .key(key.to_string())
+                            .body(ByteStream::from(bytes.clone()))
+                            .send()
+                            .await;
+                        match resp {
+                            Ok(r) => Ok(r),
+                            Err(e) => match &e {
+                                SdkError::ConstructionFailure(_b) => {
+                                    Err(backoff::Error::permanent(e))
+                                }
+                                _ => {
+                                    warn!(aws_sdk_error=%e);
+                                    Err(backoff::Error::transient(e))
+                                }
+                            },
+                        }
+                    })
                     .await;
                 debug!(resp=?resp);
                 match resp {

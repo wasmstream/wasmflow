@@ -72,7 +72,7 @@ impl FlowProcessor {
     }
 
     async fn process_record(
-        fctx: &mut FlowContext,
+        fctx: &FlowContext,
         topic: &str,
         frec: FlowStreamRecord,
     ) -> anyhow::Result<Status> {
@@ -92,8 +92,9 @@ impl FlowProcessor {
             offset: frec.offset,
             timestamp,
         };
-        let flow_state = FlowState::new(fctx.s3_sink.clone())
-            .with_context(|| "Error initializing flow state")?;
+        let mut fctx = fctx.clone();
+        let flow_state =
+            FlowState::new(fctx.s3_sink).with_context(|| "Error initializing flow state")?;
         let mut store = Store::new(&fctx.engine, flow_state);
         let (record_processor, _) = record_processor::RecordProcessor::instantiate(
             store.as_context_mut(),
@@ -143,8 +144,7 @@ impl FlowProcessor {
         let topic_name = self.stream_builder.topic_name();
         streams
             .try_for_each_concurrent(None, |rec| async move {
-                let mut f = fctx.clone();
-                let wasm_status = FlowProcessor::process_record(&mut f, topic_name, rec).await;
+                let wasm_status = FlowProcessor::process_record(fctx, topic_name, rec).await;
                 info!(wasm_status=?wasm_status);
                 Ok(())
             })
@@ -159,8 +159,8 @@ impl FlowState {
         Ok(Self {
             wasi: WasiCtxBuilder::new()
                 .inherit_stdio()
-                .inherit_args()
-                .with_context(|| "Could not initialize WASI")?
+                //.inherit_args()
+                // .with_context(|| "Could not initialize WASI")?
                 .build(),
             data: RecordProcessorData {},
             s3_sink: s3_writer,

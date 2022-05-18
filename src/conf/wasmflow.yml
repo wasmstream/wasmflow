@@ -14,5 +14,6 @@ sinks:
       region: us-east-1
       bucket: wasmtime-sink
       key_prefix: my-stream
+      file_size: 4096
 processors:
   - module_path: "./target/wasm32-wasi/release/wasm_s3_sink.wasm"

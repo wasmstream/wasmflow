@@ -49,6 +49,7 @@ pub enum Sink {
         region: String,
         bucket: String,
         key_prefix: String,
+        file_size: u16,
     },
 }
 

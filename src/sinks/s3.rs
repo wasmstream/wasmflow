@@ -16,12 +16,11 @@ use tracing::{debug, error, warn};
 
 wit_bindgen_wasmtime::export!({ paths: ["wit/s3-sink.wit"], async: * });
 
-const S3_BUFFER_SIZE_BYTES: usize = 4096;
-
 #[derive(Clone, Debug)]
 pub struct BufferedS3Sink {
     bucket: String,
     key_prefix: String,
+    file_size: usize,
     client: Client,
     buffer: Arc<Mutex<BTreeMap<i32, Vec<u8>>>>,
 }
@@ -33,6 +32,7 @@ impl BufferedS3Sink {
                 region,
                 bucket,
                 key_prefix,
+                file_size,
             } => {
                 let region_provider =
                     RegionProviderChain::first_try(Region::new(region.to_string()))
@@ -42,6 +42,7 @@ impl BufferedS3Sink {
                 Ok(Self {
                     bucket: bucket.to_string(),
                     key_prefix: key_prefix.to_string(),
+                    file_size: usize::from(*file_size),
                     client,
                     buffer: Arc::new(Mutex::new(BTreeMap::new())),
                 })
@@ -66,11 +67,10 @@ impl s3_sink::S3Sink for BufferedS3Sink {
                     let m = g.deref_mut();
                     let buf = m
                         .entry(partition_id)
-                        .or_insert_with(|| Vec::with_capacity(S3_BUFFER_SIZE_BYTES));
+                        .or_insert_with(|| Vec::with_capacity(self.file_size));
                     buf.extend_from_slice(body);
-                    if buf.len() > ((0.8 * S3_BUFFER_SIZE_BYTES as f32) as usize) {
-                        flush_buffer =
-                            m.insert(partition_id, Vec::with_capacity(S3_BUFFER_SIZE_BYTES));
+                    if buf.len() > ((0.8 * self.file_size as f32) as usize) {
+                        flush_buffer = m.insert(partition_id, Vec::with_capacity(self.file_size));
                     }
                 }
             }

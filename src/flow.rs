@@ -2,6 +2,7 @@ wit_bindgen_wasmtime::import!({ paths: ["./wit/record-processor.wit"], async: *}
 use std::{path::PathBuf, pin::Pin};
 
 use anyhow::{anyhow, Context};
+use opentelemetry::{metrics::Meter, KeyValue};
 use record_processor::{FlowRecord, RecordProcessorData};
 use rskafka::record::Record;
 use tracing::info;
@@ -24,6 +25,7 @@ pub struct FlowContext {
 }
 
 pub struct FlowProcessor {
+    meter: Meter,
     pub stream_builder: KafkaStreamBuilder,
     pub flow_context: FlowContext,
 }
@@ -43,6 +45,7 @@ pub struct FlowStreamRecord {
 impl FlowProcessor {
     pub fn new(
         filename: &PathBuf,
+        meter: Meter,
         stream_builder: KafkaStreamBuilder,
         s3_sink: BufferedS3Sink,
     ) -> anyhow::Result<Self> {
@@ -66,6 +69,7 @@ impl FlowProcessor {
             s3_sink,
         };
         Ok(Self {
+            meter,
             stream_builder,
             flow_context,
         })
@@ -140,10 +144,21 @@ impl FlowProcessor {
             Pin<Box<dyn Stream<Item = anyhow::Result<FlowStreamRecord>> + Send>>,
         > = futures::stream::select_all(streams);
 
+        let record_counter = &self
+            .meter
+            .u64_counter("records-processed")
+            .with_description("Kafka records processed by topic and partition_id")
+            .with_unit(opentelemetry::metrics::Unit::new("count"))
+            .init();
         let fctx = &self.flow_context;
         let topic_name = self.stream_builder.topic_name();
         streams
             .try_for_each_concurrent(None, |rec| async move {
+                let kv: [KeyValue; 2] = [
+                    KeyValue::new("topic", topic_name.to_string()),
+                    KeyValue::new("partition_id", rec.partition_id as i64),
+                ];
+                record_counter.add(1, &kv);
                 let wasm_status = FlowProcessor::process_record(fctx, topic_name, rec).await;
                 info!(wasm_status=?wasm_status);
                 Ok(())

@@ -1,3 +1,4 @@
+#[allow(clippy::all)]
 mod s3_sink {
     #[repr(u8)]
     #[derive(Clone, Copy, PartialEq, Eq)]
@@ -5,8 +6,8 @@ mod s3_sink {
         Ok,
         Error,
     }
-    impl std::fmt::Debug for Status {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    impl core::fmt::Debug for Status {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             match self {
                 Status::Ok => f.debug_tuple("Status::Ok").finish(),
                 Status::Error => f.debug_tuple("Status::Error").finish(),

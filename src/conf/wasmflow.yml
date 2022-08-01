@@ -3,6 +3,7 @@ sources:
       brokers:
         - "my-broker.confluent.cloud:9092"
       topic: my-topic
+      group_id: wasmflow-group
       batch_size: 1000000
       offset: Earliest
       sasl:

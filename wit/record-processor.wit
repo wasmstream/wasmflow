@@ -13,4 +13,4 @@ record flow-record {
     timestamp: s64
 }
 
-process-record: function(rec: flow-record) -> status
+process-record: func(rec: flow-record) -> status

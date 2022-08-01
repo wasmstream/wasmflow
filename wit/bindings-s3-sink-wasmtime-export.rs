@@ -1,3 +1,4 @@
+#[allow(clippy::all)]
 pub mod s3_sink {
     #[allow(unused_imports)]
     use wit_bindgen_wasmtime::{anyhow, wasmtime};
@@ -7,8 +8,8 @@ pub mod s3_sink {
         Ok,
         Error,
     }
-    impl std::fmt::Debug for Status {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    impl core::fmt::Debug for Status {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             match self {
                 Status::Ok => f.debug_tuple("Status::Ok").finish(),
                 Status::Error => f.debug_tuple("Status::Error").finish(),

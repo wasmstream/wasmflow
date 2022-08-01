@@ -1,3 +1,4 @@
+#[allow(clippy::all)]
 pub mod record_processor {
     #[allow(unused_imports)]
     use wit_bindgen_wasmtime::{anyhow, wasmtime};
@@ -7,8 +8,8 @@ pub mod record_processor {
         Ok,
         Error,
     }
-    impl std::fmt::Debug for Status {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    impl core::fmt::Debug for Status {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             match self {
                 Status::Ok => f.debug_tuple("Status::Ok").finish(),
                 Status::Error => f.debug_tuple("Status::Error").finish(),
@@ -25,8 +26,8 @@ pub mod record_processor {
         pub offset: i64,
         pub timestamp: i64,
     }
-    impl<'a> std::fmt::Debug for FlowRecord<'a> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    impl<'a> core::fmt::Debug for FlowRecord<'a> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             f.debug_struct("FlowRecord")
                 .field("key", &self.key)
                 .field("value", &self.value)
@@ -170,7 +171,6 @@ pub mod record_processor {
                 timestamp: timestamp0,
             } = rec;
             let (result2_0, result2_1, result2_2) = match key0 {
-                None => (0i32, 0i32, 0i32),
                 Some(e) => {
                     let vec1 = e;
                     let ptr1 = func_canonical_abi_realloc
@@ -178,15 +178,28 @@ pub mod record_processor {
                     memory.data_mut(&mut caller).store_many(ptr1, &vec1)?;
                     (1i32, ptr1, vec1.len() as i32)
                 }
+                None => {
+                    let e = ();
+                    {
+                        let () = e;
+                        (0i32, 0i32, 0i32)
+                    }
+                }
             };
             let (result4_0, result4_1, result4_2) = match value0 {
-                None => (0i32, 0i32, 0i32),
                 Some(e) => {
                     let vec3 = e;
                     let ptr3 = func_canonical_abi_realloc
                         .call(&mut caller, (0, 0, 1, (vec3.len() as i32) * 1))?;
                     memory.data_mut(&mut caller).store_many(ptr3, &vec3)?;
                     (1i32, ptr3, vec3.len() as i32)
+                }
+                None => {
+                    let e = ();
+                    {
+                        let () = e;
+                        (0i32, 0i32, 0i32)
+                    }
                 }
             };
             let vec8 = headers0;

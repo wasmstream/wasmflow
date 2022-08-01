@@ -1,7 +1,7 @@
 use anyhow::Context;
 use opentelemetry_otlp::WithExportConfig;
 use wasmflow::{
-    flow::FlowProcessor, sinks::s3::BufferedS3Sink, sources::kafka::KafkaStreamBuilder,
+    flow::FlowProcessor, sinks::s3::BufferedS3Sink, sources::kafka::create_kafka_consumer,
 };
 
 #[tokio::main]
@@ -10,14 +10,14 @@ async fn main() -> anyhow::Result<()> {
 
     console_subscriber::init();
 
-    let conf = wasmflow::conf::read_config()?;
-    let source_stream_builder = KafkaStreamBuilder::new(&conf.sources[0]).await?;
-    let s3_sink = BufferedS3Sink::new(&conf.sinks[0]).await?;
+    let cfg = wasmflow::conf::read_config()?;
+    let kafka_consumer = create_kafka_consumer(&cfg.sources[0])?;
+    let s3_sink = BufferedS3Sink::new(&cfg.sinks[0]).await?;
     let meter = opentelemetry::global::meter("wasmflow");
     let wasm_flow = FlowProcessor::new(
-        &conf.processors[0].module_path,
+        &cfg.processors[0].module_path,
         meter,
-        source_stream_builder,
+        kafka_consumer,
         s3_sink,
     )
     .with_context(|| "Could not initialize WASM Flow")?;

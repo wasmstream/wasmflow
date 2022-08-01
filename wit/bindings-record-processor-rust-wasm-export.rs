@@ -1,3 +1,4 @@
+#[allow(clippy::all)]
 mod record_processor {
     #[repr(u8)]
     #[derive(Clone, Copy, PartialEq, Eq)]
@@ -5,8 +6,8 @@ mod record_processor {
         Ok,
         Error,
     }
-    impl std::fmt::Debug for Status {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    impl core::fmt::Debug for Status {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             match self {
                 Status::Ok => f.debug_tuple("Status::Ok").finish(),
                 Status::Error => f.debug_tuple("Status::Error").finish(),
@@ -23,8 +24,8 @@ mod record_processor {
         pub offset: i64,
         pub timestamp: i64,
     }
-    impl std::fmt::Debug for FlowRecord {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    impl core::fmt::Debug for FlowRecord {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             f.debug_struct("FlowRecord")
                 .field("key", &self.key)
                 .field("value", &self.value)
@@ -37,7 +38,7 @@ mod record_processor {
         }
     }
     #[export_name = "process-record"]
-    unsafe extern "C" fn __wit_bindgen_process_record(
+    unsafe extern "C" fn __wit_bindgen_record_processor_process_record(
         arg0: i32,
         arg1: i32,
         arg2: i32,
@@ -102,7 +103,10 @@ mod record_processor {
             offset: arg11,
             timestamp: arg12,
         });
-        result as i32
+        match result {
+            Status::Ok => 0,
+            Status::Error => 1,
+        }
     }
     pub trait RecordProcessor {
         fn process_record(rec: FlowRecord) -> Status;

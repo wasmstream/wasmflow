@@ -1,18 +1,10 @@
 use anyhow::{Context, Result};
 use educe::Educe;
-use rskafka::client::partition::OffsetAt;
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Formatter};
 use std::fs;
 use std::path::PathBuf;
 use tracing::info;
-
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "OffsetAt")]
-enum OffsetAtDef {
-    Earliest,
-    Latest,
-}
 
 fn fmt_redact(_s: &str, f: &mut Formatter) -> fmt::Result {
     f.write_str("** Redacted **")
@@ -34,10 +26,9 @@ pub enum SaslConfig {
 pub enum Source {
     Kafka {
         brokers: Vec<String>,
+        group_id: String,
         topic: String,
         batch_size: i32,
-        #[serde(with = "OffsetAtDef")]
-        offset: OffsetAt,
         sasl: SaslConfig,
     },
 }

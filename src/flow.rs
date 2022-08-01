@@ -1,18 +1,21 @@
 wit_bindgen_wasmtime::import!({ paths: ["./wit/record-processor.wit"], async: *});
-use std::{path::PathBuf, pin::Pin};
+use std::path::PathBuf;
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
+use futures::TryStreamExt;
 use opentelemetry::{metrics::Meter, KeyValue};
+use rdkafka::{
+    consumer::StreamConsumer,
+    message::{BorrowedMessage, Headers},
+    Message,
+};
 use record_processor::{FlowRecord, RecordProcessorData};
-use rskafka::record::Record;
 use tracing::info;
 use wasi_common::WasiCtx;
 use wasmtime::*;
 use wasmtime_wasi::WasiCtxBuilder;
 
-use futures::{stream::SelectAll, Stream, StreamExt, TryStreamExt};
-
-use crate::{sinks::s3::BufferedS3Sink, sources::kafka::KafkaStreamBuilder};
+use crate::sinks::s3::BufferedS3Sink;
 
 use self::record_processor::Status;
 
@@ -26,7 +29,7 @@ pub struct FlowContext {
 
 pub struct FlowProcessor {
     meter: Meter,
-    pub stream_builder: KafkaStreamBuilder,
+    pub kafka_consumer: StreamConsumer,
     pub flow_context: FlowContext,
 }
 
@@ -36,22 +39,15 @@ pub struct FlowState {
     pub s3_sink: BufferedS3Sink,
 }
 
-pub struct FlowStreamRecord {
-    pub record: Record,
-    pub offset: i64,
-    pub partition_id: i32,
-}
-
 impl FlowProcessor {
     pub fn new(
         filename: &PathBuf,
         meter: Meter,
-        stream_builder: KafkaStreamBuilder,
+        kafka_consumer: StreamConsumer,
         s3_sink: BufferedS3Sink,
     ) -> anyhow::Result<Self> {
         let mut config = Config::new();
         config.wasm_multi_memory(true);
-        config.wasm_module_linking(true);
         config.async_support(true);
         let engine =
             Engine::new(&config).with_context(|| "Could not create a new Wasmtime engine.")?;
@@ -70,31 +66,28 @@ impl FlowProcessor {
         };
         Ok(Self {
             meter,
-            stream_builder,
+            kafka_consumer,
             flow_context,
         })
     }
 
-    async fn process_record(
-        fctx: &FlowContext,
-        topic: &str,
-        frec: FlowStreamRecord,
-    ) -> anyhow::Result<Status> {
-        let rec = frec.record;
-        let timestamp = rec.timestamp.unix_timestamp();
-        let headers: Vec<(&str, &[u8])> = rec
-            .headers
-            .iter()
-            .map(|(k, v)| (k.as_str(), v.as_slice()))
-            .collect();
+    async fn process_msg(fctx: &FlowContext, msg: &BorrowedMessage<'_>) -> anyhow::Result<Status> {
+        let mut headers: Vec<(&str, &[u8])> = Vec::new();
+        if let Some(hdrs) = msg.headers() {
+            for idx in 0..hdrs.count() {
+                if let Some((k, v)) = hdrs.get(idx) {
+                    headers.push((k, v));
+                }
+            }
+        }
         let frec = FlowRecord {
-            key: rec.key.as_deref(),
-            value: rec.value.as_deref(),
+            key: msg.key(),
+            value: msg.payload(),
             headers: &headers,
-            topic,
-            partition: frec.partition_id,
-            offset: frec.offset,
-            timestamp,
+            topic: msg.topic(),
+            partition: msg.partition(),
+            offset: msg.offset(),
+            timestamp: msg.timestamp().to_millis().unwrap_or(-1),
         };
         let mut fctx = fctx.clone();
         let flow_state =
@@ -116,34 +109,6 @@ impl FlowProcessor {
     }
 
     pub async fn run(&self) -> anyhow::Result<()> {
-        let kafka_streams = self
-            .stream_builder
-            .build()
-            .await
-            .with_context(|| "Error creating Kafka partition streams")?;
-
-        let streams: Vec<Pin<Box<dyn Stream<Item = anyhow::Result<FlowStreamRecord>> + Send>>> =
-            kafka_streams
-                .into_iter()
-                .map(|ks| {
-                    let partition_id = ks.0;
-                    let kstream = ks.1;
-                    let f = kstream.map(move |v| match v {
-                        Ok(r) => Ok(FlowStreamRecord {
-                            record: r.0.record,
-                            offset: r.0.offset,
-                            partition_id,
-                        }),
-                        Err(e) => Err(anyhow!(e)),
-                    });
-                    f.boxed()
-                })
-                .collect();
-
-        let streams: SelectAll<
-            Pin<Box<dyn Stream<Item = anyhow::Result<FlowStreamRecord>> + Send>>,
-        > = futures::stream::select_all(streams);
-
         let record_counter = &self
             .meter
             .u64_counter("records-processed")
@@ -151,15 +116,15 @@ impl FlowProcessor {
             .with_unit(opentelemetry::metrics::Unit::new("count"))
             .init();
         let fctx = &self.flow_context;
-        let topic_name = self.stream_builder.topic_name();
-        streams
-            .try_for_each_concurrent(None, |rec| async move {
+        self.kafka_consumer
+            .stream()
+            .try_for_each_concurrent(None, |msg| async move {
                 let kv: [KeyValue; 2] = [
-                    KeyValue::new("topic", topic_name.to_string()),
-                    KeyValue::new("partition_id", rec.partition_id as i64),
+                    KeyValue::new("topic", msg.topic().to_string()),
+                    KeyValue::new("partition_id", msg.partition() as i64),
                 ];
                 record_counter.add(1, &kv);
-                let wasm_status = FlowProcessor::process_record(fctx, topic_name, rec).await;
+                let wasm_status = FlowProcessor::process_msg(fctx, &msg).await;
                 info!(wasm_status=?wasm_status);
                 Ok(())
             })

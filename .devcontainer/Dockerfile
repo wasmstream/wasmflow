@@ -8,5 +8,4 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends \
         cmake \
         libsasl2-dev \
-    && rustup default stable \
     && rustup target add wasm32-wasi

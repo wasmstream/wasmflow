@@ -1,17 +1,16 @@
 sources:
-  - Kafka:
+  - !Kafka
       brokers:
         - "my-broker.confluent.cloud:9092"
       topic: my-topic
       group_id: wasmflow-group
       batch_size: 1000000
-      offset: Earliest
       sasl:
-        Plain:
+        !Plain
           username: secret
           password: super-secret
 sinks:
-  - S3:
+  - !S3
       region: us-east-1
       bucket: wasmtime-sink
       key_prefix: my-stream
